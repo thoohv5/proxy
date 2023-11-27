@@ -1,0 +1,22 @@
+proxy:
+  - type: "http"
+    listen:
+      network: ""
+      address: "0.0.0.0:8081"
+    dial:
+      network: ""
+      address: "127.0.0.1:8080"
+  - type: "tcp"
+    listen:
+      network: "tcp"
+      address: "0.0.0.0:8083"
+    dial:
+      network: "tcp"
+      address: "127.0.0.1:8082"
+  - type: "udp"
+    listen:
+      network: "udp"
+      address: "0.0.0.0:8085"
+    dial:
+      network: "udp"
+      address: "127.0.0.1:8084"
