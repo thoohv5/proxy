@@ -13,6 +13,7 @@ import (
 )
 
 var (
+	cfgData = flag.String("data", "", "{\"proxy\":[{\"type\":\"http\",\"listen\":{\"network\":\"\",\"address\":\"0.0.0.0:8081\"},\"dial\":{\"network\":\"\",\"address\":\"127.0.0.1:8080\"}}]},配置数据，type支持http/tcp/udp")
 	cfgFile = flag.String("config", file.AbPath("../../config/config.yaml"), "--config=.")
 )
 
@@ -25,8 +26,17 @@ func main() {
 
 	cfg := &Cfg{}
 
-	if err := pconfig.Parse(*cfgFile, cfg); err != nil {
-		panic(err)
+	if len(*cfgData) > 0 {
+		if err := pconfig.ParseData(*cfgData, cfg); err != nil {
+			panic(err)
+		}
+	} else if len(*cfgFile) > 0 {
+		if err := pconfig.ParseFile(*cfgFile, cfg); err != nil {
+			panic(err)
+		}
+	} else {
+		fmt.Println("请配置数据")
+		return
 	}
 
 	fmt.Println("配置加载")
