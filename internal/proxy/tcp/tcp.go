@@ -1,12 +1,14 @@
 package tcp
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
 
 	"github.com/thoohv5/proxy/internal/config"
 	"github.com/thoohv5/proxy/internal/proxy/standard"
+	"github.com/thoohv5/proxy/pkg/errgroup"
 )
 
 type tcp struct {
@@ -37,25 +39,45 @@ func (p *tcp) Handle() (err error) {
 		}
 	}()
 
+	errCh := make(chan error)
 	for {
-		// 等待客户端连接
-		conn, aErr := listener.Accept()
-		if aErr != nil {
-			err = aErr
-			return
-		}
-
-		// 启动新的 goroutine 处理连接
-		go func() {
-			if err = p.dealClient(conn); err != nil {
+		select {
+		case err = <-errCh:
+			return err
+		default:
+			// 等待客户端连接
+			conn, aErr := listener.Accept()
+			if aErr != nil {
+				err = aErr
 				return
 			}
-		}()
+			// 启动新的 goroutine 处理连接
+			go func() {
+				var gErr error
+				defer func() {
+					// 关闭连接
+					cErr := conn.Close()
+					if cErr != nil {
+						if gErr != nil {
+							gErr = fmt.Errorf("err :%w, close err: %w", gErr, cErr)
+						} else {
+							gErr = fmt.Errorf("close err: %w", cErr)
+						}
+					}
+					if gErr != nil {
+						errCh <- gErr
+					}
+				}()
+				if gErr = p.dealClient(context.Background(), conn); gErr != nil {
+					return
+				}
+			}()
+		}
 	}
 }
 
 // DealClient 处理client连接
-func (p *tcp) dealClient(clientConn net.Conn) (err error) {
+func (p *tcp) dealClient(ctx context.Context, cConn net.Conn) (err error) {
 	// 连接到实际的后端服务器
 	conn, err := net.Dial(p.cfg.Dial.Network, p.cfg.Dial.Address)
 	if err != nil {
@@ -72,21 +94,27 @@ func (p *tcp) dealClient(clientConn net.Conn) (err error) {
 		}
 	}()
 
+	eg := errgroup.WithContext(ctx)
+
 	// 启动 goroutine 将客户端的数据转发到后端服务器
-	go func() {
-		if _, err = io.Copy(conn, clientConn); err != nil {
-			return
+	eg.Go(func(ctx context.Context) error {
+		if _, cErr := io.Copy(conn, cConn); err != nil {
+			return cErr
 		}
-	}()
+		return nil
+	})
 
 	// 将后端服务器的数据转发回客户端
-	if _, err = io.Copy(clientConn, conn); err != nil {
+	eg.Go(func(ctx context.Context) error {
+		if _, cErr := io.Copy(cConn, conn); err != nil {
+			return cErr
+		}
+		return nil
+	})
+
+	if err = eg.Wait(); err != nil {
 		return
 	}
 
-	// 关闭连接
-	if err = clientConn.Close(); err != nil {
-		return
-	}
 	return
 }
