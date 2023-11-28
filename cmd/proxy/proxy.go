@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"flag"
+	"fmt"
 
 	"github.com/thoohv5/proxy/internal/config"
 	"github.com/thoohv5/proxy/internal/proxy"
@@ -12,7 +13,7 @@ import (
 )
 
 var (
-	cfgFile = flag.String("config", file.AbPath("./config/config.yaml"), "--config=.")
+	cfgFile = flag.String("config", file.AbPath("../../config/config.yaml"), "--config=.")
 )
 
 type Cfg struct {
@@ -28,6 +29,8 @@ func main() {
 		panic(err)
 	}
 
+	fmt.Println("配置加载")
+
 	eg := errgroup.WithContext(context.Background())
 	for _, c := range cfg.Proxy {
 		cc := c
@@ -35,5 +38,6 @@ func main() {
 			return proxy.Adapter(cc).Handle()
 		})
 	}
+	fmt.Println("服务启动")
 	panic(eg.Wait())
 }
